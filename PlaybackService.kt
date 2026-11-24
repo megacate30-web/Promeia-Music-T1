@@ -18,7 +18,7 @@ import kotlinx.coroutines.*
 import org.json.JSONArray
 import org.json.JSONObject
 
-fun Song.item(edit: Edit? = null): MediaItem = MediaItem.Builder().setMediaId(uri).setUri(uri).setMediaMetadata(MediaMetadata.Builder().setTitle(title).setArtist(artist).setAlbumTitle(album).apply { edit?.cover?.takeUnless { it=="-" }?.let { setArtworkUri(Uri.parse(it)) } }.build()).build()
+fun Song.item(edit: Edit? = null): MediaItem = MediaItem.Builder().setMediaId(uri).setUri(uri).setMediaMetadata(MediaMetadata.Builder().setTitle(title).setArtist(artist).setAlbumTitle(album).build()).build()
 @androidx.annotation.OptIn(UnstableApi::class)
 class PlaybackService : MediaSessionService() {
     private lateinit var player: ExoPlayer
