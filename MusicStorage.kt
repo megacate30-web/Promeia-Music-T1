@@ -24,4 +24,6 @@ object MusicStorage {
     suspend fun copyAudio(input:InputStream,tmp:File):String { val digest=MessageDigest.getInstance("SHA-256");input.use{src->tmp.outputStream().buffered().use{out->val buffer=ByteArray(65536);while(true){currentCoroutineContext().ensureActive();val n=src.read(buffer);if(n<0)break;digest.update(buffer,0,n);out.write(buffer,0,n)}}};return digest.digest().joinToString(""){"%02x".format(it.toInt() and 255)} }
     fun embeddedFile(c:Context,id:String)=File(folder(c,"Covers"),"${key(id)}-original.img")
     fun removeSidecars(c:Context,id:String) { embeddedFile(c,id).delete();File(folder(c,"Metadata"),"${key(id)}.json").delete();File(folder(c,"Lyrics"),"${key(id)}.lrc").delete() }
+    fun removeLegacyTrackMetadata(c:Context) { folder(c,"Metadata").listFiles()?.filter { it.name.matches(Regex("[0-9a-f]{64}\\.json")) }?.forEach { it.delete() }; folder(c,"Covers").listFiles()?.filter { it.name.endsWith("-custom.img") }?.forEach { it.delete() } }
+
 }
