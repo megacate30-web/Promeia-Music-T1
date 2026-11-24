@@ -1,0 +1,54 @@
+name: Android CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Prepare Android project layout
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p app/src/main/java app/src/test/java app/src/main/res/drawable app/src/main/res/values app/src/main/res/xml
+          cp 'build.gradle (1).kts' app/build.gradle.kts
+          cp AndroidManifest.xml app/src/main/AndroidManifest.xml
+          for f in ./*.kt; do
+            [ -f "$f" ] || continue
+            pkg="$(sed -n 's/^package[[:space:]]\+\([^[:space:]]*\).*/\1/p' "$f" | head -n1)"
+            [ -n "$pkg" ] || { echo "Missing package declaration: $f"; exit 1; }
+            rel="${pkg//.//}"
+            if [[ "$f" == *Test.kt ]]; then dest="app/src/test/java/$rel"; else dest="app/src/main/java/$rel"; fi
+            mkdir -p "$dest"
+            cp "$f" "$dest/"
+          done
+          cp ic_promeia.xml app/src/main/res/drawable/ic_promeia.xml
+          cp styles.xml app/src/main/res/values/styles.xml
+          cp share_paths.xml app/src/main/res/xml/share_paths.xml
+      - name: Install Android SDK 35
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Run tests and build APK
+        run: gradle --no-daemon :app:testDebugUnitTest :app:assembleDebug --stacktrace
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Promeia-Music-T1-debug
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
