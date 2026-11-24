@@ -21,10 +21,9 @@ import java.util.Locale
 import java.io.File
 import kotlinx.coroutines.sync.withLock
 
-@Entity data class Song(@PrimaryKey val uri: String, val title: String, val artist: String, val album: String, val folder: String, val duration: Long, val size: Long, val added: Long, val name: String, val genre: String = "", val year: String = "", val track: String = "", val disc: String = "", val albumArtist: String = "", val composer: String = "")
-@Entity data class Edit(@PrimaryKey val uri: String, val title: String? = null, val artist: String? = null, val album: String? = null, val genre: String? = null, val year: String? = null, val track: String? = null, val disc: String? = null, val albumArtist: String? = null, val composer: String? = null, val cover: String? = null, val favorite: Boolean = false, val hidden: Boolean = false)
+@Entity data class Song(@PrimaryKey val uri: String, val title: String, val artist: String, val album: String, val folder: String, val duration: Long, val added: Long, val name: String)
+@Entity data class Edit(@PrimaryKey val uri: String, val favorite: Boolean = false, val hidden: Boolean = false)
 @Entity data class Playlist(@PrimaryKey val id: String, val name: String, val description: String = "", val cover: String? = null, val favorite: Boolean = false, val songs: List<String> = emptyList())
-@Entity data class Listen(@PrimaryKey(autoGenerate = true) val id: Long = 0, val uri: String, val at: Long, val millis: Long, val start: Boolean)
 class Converters { @TypeConverter fun encode(value: List<String>): String = com.google.gson.Gson().toJson(value); @TypeConverter fun decode(value: String): List<String> = com.google.gson.Gson().fromJson(value, Array<String>::class.java).toList() }
 @Dao interface LibraryDao {
     @Query("SELECT * FROM Song") fun songs(): Flow<List<Song>>
@@ -33,20 +32,14 @@ class Converters { @TypeConverter fun encode(value: List<String>): String = com.
     @Query("SELECT * FROM Edit") suspend fun allEdits(): List<Edit>
     @Query("SELECT * FROM Playlist") fun playlists(): Flow<List<Playlist>>
     @Query("SELECT * FROM Playlist") suspend fun allPlaylists(): List<Playlist>
-    @Query("SELECT * FROM Listen ORDER BY at DESC") fun listens(): Flow<List<Listen>>
-    @Query("SELECT * FROM Listen ORDER BY at DESC") suspend fun allListens(): List<Listen>
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun putSongs(songs: List<Song>)
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun putEdit(edit: Edit)
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun putPlaylist(playlist: Playlist)
-    @Insert suspend fun listen(event: Listen)
-    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun putListens(events: List<Listen>)
     @Query("DELETE FROM Song WHERE uri = :uri") suspend fun removeSong(uri: String)
     @Query("DELETE FROM Edit WHERE uri = :uri") suspend fun removeEdit(uri:String)
-    @Query("UPDATE Listen SET uri = :newUri WHERE uri = :oldUri") suspend fun remapListens(oldUri:String,newUri:String)
-    @Query("DELETE FROM Listen WHERE uri = :uri") suspend fun removeListens(uri:String)
     @Delete suspend fun removePlaylist(playlist: Playlist)
 }
-@Database(entities = [Song::class, Edit::class, Playlist::class, Listen::class], version = 2, exportSchema = true)
+@Database(entities = [Song::class, Edit::class, Playlist::class], version = 3, exportSchema = true)
 @TypeConverters(Converters::class)
 abstract class MusicDb : RoomDatabase() {
     abstract fun dao(): LibraryDao
@@ -59,10 +52,23 @@ abstract class MusicDb : RoomDatabase() {
                 db.execSQL("DELETE FROM Song WHERE uri LIKE 'content://media/%'")
             }
         }
-        fun get(c: Context): MusicDb = instance ?: synchronized(this) { instance ?: Room.databaseBuilder(c.applicationContext, MusicDb::class.java, "promeia.db").addMigrations(manualLibraryMigration).build().also { instance = it } }
+        private val simplifiedLibraryMigration = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS Song_new (uri TEXT NOT NULL, title TEXT NOT NULL, artist TEXT NOT NULL, album TEXT NOT NULL, folder TEXT NOT NULL, duration INTEGER NOT NULL, added INTEGER NOT NULL, name TEXT NOT NULL, PRIMARY KEY(uri))")
+                db.execSQL("INSERT INTO Song_new (uri,title,artist,album,folder,duration,added,name) SELECT uri,title,artist,album,folder,duration,added,name FROM Song")
+                db.execSQL("DROP TABLE Song")
+                db.execSQL("ALTER TABLE Song_new RENAME TO Song")
+                db.execSQL("CREATE TABLE IF NOT EXISTS Edit_new (uri TEXT NOT NULL, favorite INTEGER NOT NULL, hidden INTEGER NOT NULL, PRIMARY KEY(uri))")
+                db.execSQL("INSERT INTO Edit_new (uri,favorite,hidden) SELECT uri,favorite,hidden FROM Edit")
+                db.execSQL("DROP TABLE Edit")
+                db.execSQL("ALTER TABLE Edit_new RENAME TO Edit")
+                db.execSQL("DROP TABLE IF EXISTS Listen")
+            }
+        }
+        fun get(c: Context): MusicDb = instance ?: synchronized(this) { instance ?: Room.databaseBuilder(c.applicationContext, MusicDb::class.java, "promeia.db").addMigrations(manualLibraryMigration, simplifiedLibraryMigration).build().also { instance = it } }
     }
 }
-fun Song.resolved(e: Edit?): Song = if(e == null) this else copy(title=e.title?:title, artist=e.artist?:artist, album=e.album?:album, genre=e.genre?:genre, year=e.year?:year, track=e.track?:track, disc=e.disc?:disc, albumArtist=e.albumArtist?:albumArtist, composer=e.composer?:composer)
+fun Song.resolved(e: Edit?): Song = this
 fun normalized(s: String): String = Normalizer.normalize(s, Normalizer.Form.NFD).replace(Regex("\\p{M}+"), "").lowercase(Locale.ROOT).replace(Regex("[^\\p{L}\\p{N}]+"), " ").trim()
 fun matchSong(title: String, artist: String, songs: List<Song>): Song? = songs.filter { normalized(it.title)==normalized(title) && (artist.isBlank() || normalized(it.artist)==normalized(artist)) }.singleOrNull()
 fun formatTime(ms: Long): String { val seconds = ms.coerceAtLeast(0)/1000; return "%d:%02d".format(Locale.ROOT, seconds/60, seconds%60) }
@@ -88,14 +94,13 @@ object LibraryScanner {
                 val values=try { r.setDataSource(tmp.absolutePath)
                     if(r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_HAS_AUDIO)!="yes" || r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_HAS_VIDEO)=="yes")return@withLock null
                     picture=r.embeddedPicture
-                    listOf(MediaMetadataRetriever.METADATA_KEY_TITLE,MediaMetadataRetriever.METADATA_KEY_ARTIST,MediaMetadataRetriever.METADATA_KEY_ALBUM,MediaMetadataRetriever.METADATA_KEY_DURATION,MediaMetadataRetriever.METADATA_KEY_GENRE,MediaMetadataRetriever.METADATA_KEY_YEAR,MediaMetadataRetriever.METADATA_KEY_CD_TRACK_NUMBER,MediaMetadataRetriever.METADATA_KEY_DISC_NUMBER,MediaMetadataRetriever.METADATA_KEY_ALBUMARTIST,MediaMetadataRetriever.METADATA_KEY_COMPOSER).map{r.extractMetadata(it).orEmpty()}
+                    listOf(MediaMetadataRetriever.METADATA_KEY_TITLE,MediaMetadataRetriever.METADATA_KEY_ARTIST,MediaMetadataRetriever.METADATA_KEY_ALBUM,MediaMetadataRetriever.METADATA_KEY_DURATION).map{r.extractMetadata(it).orEmpty()}
                 }finally{r.release()}
                 val duration=values[3].toLongOrNull()?:0L;if(duration<=0)return@withLock null
                 val final=existing?:File(dir,"$hash.$ext").also{check(tmp.renameTo(it)){"No se pudo guardar el audio"};created=it}
                 val id=MusicStorage.uri(context,final).toString()
-                val song=Song(id,values[0].ifBlank{name.substringBeforeLast('.')},values[1].ifBlank{"Desconocido"},values[2].ifBlank{"Sin álbum"},folder,duration,final.length(),System.currentTimeMillis(),name,values[4],values[5],values[6],values[7],values[8],values[9])
+                val song=Song(id,values[0].ifBlank{name.substringBeforeLast('.')},values[1].ifBlank{"Desconocido"},values[2].ifBlank{"Sin álbum"},folder,duration,System.currentTimeMillis(),name)
                 picture?.takeIf{it.size<=8*1024*1024}?.let{MusicStorage.atomic(MusicStorage.embeddedFile(context,id),it)}
-                MusicStorage.writeSong(context,song,null)
                 dao.putSongs(listOf(song));created=null;song
             }catch(e:Exception){created?.let{MusicStorage.removeSidecars(context,MusicStorage.uri(context,it).toString());it.delete()};if(e is CancellationException)throw e;throw e}finally{tmp.delete()}
         }
@@ -104,24 +109,23 @@ object LibraryScanner {
     suspend fun migrateLegacy(context:Context) = withContext(Dispatchers.IO) {
         migrationLock.withLock {
             val db=MusicDb.get(context);val dao=db.dao();val prefs=context.getSharedPreferences("storage",0)
+            if(!prefs.getBoolean("simple_metadata_cleaned",false)) { MusicStorage.removeLegacyTrackMetadata(context); prefs.edit().putBoolean("simple_metadata_cleaned",true).apply() }
             if(prefs.getBoolean("v5_migrated",false))return@withLock
             val mapping=mutableMapOf<String,String>()
             for(old in dao.allSongs().filter{!MusicStorage.owned(context,Uri.parse(it.uri))}) {
                 try {
                     val copied=importFile(context,Uri.parse(old.uri),old.folder) ?: continue
                     val edit=dao.allEdits().find{it.uri==old.uri}
-                    val oldCover=edit?.cover?.takeUnless{it=="-"}?.let{Uri.parse(it).path}?.let{File(it)}
-                    val newCover=oldCover?.takeIf{it.isFile}?.let{f->File(MusicStorage.folder(context,"Covers"),"${MusicStorage.key(old.uri)}-custom.img").also{f.copyTo(it,overwrite=true)}}
                     val oldLyrics=File(File(context.filesDir,"lyrics"),"${MusicStorage.key(old.uri)}.lrc")
                     if(oldLyrics.isFile)oldLyrics.copyTo(File(MusicStorage.folder(context,"Lyrics"),"${MusicStorage.key(copied.uri)}.lrc"),overwrite=true)
                     val oldMeta=copied.copy(added=old.added,name=old.name)
-                    val newEdit=edit?.copy(uri=copied.uri,cover=newCover?.let{Uri.fromFile(it).toString()}?:edit.cover)
+                    val newEdit=edit?.copy(uri=copied.uri)
                     db.withTransaction {
                         dao.putSongs(listOf(oldMeta));if(newEdit!=null)dao.putEdit(newEdit)
                         dao.allPlaylists().filter{old.uri in it.songs}.forEach{p->dao.putPlaylist(p.copy(songs=p.songs.map{if(it==old.uri)copied.uri else it}.distinct()))}
-                        dao.remapListens(old.uri,copied.uri);dao.removeEdit(old.uri);dao.removeSong(old.uri)
+                        dao.removeEdit(old.uri);dao.removeSong(old.uri)
                     }
-                    mapping[old.uri]=copied.uri;MusicStorage.writeSong(context,oldMeta,newEdit)
+                    mapping[old.uri]=copied.uri
                 }catch(e:Exception){if(e is CancellationException)throw e;android.util.Log.w("Promeia","No se pudo migrar un audio anterior",e)}
             }
             // Keep unavailable legacy records untouched for manual removal; no broad permission is requested.
