@@ -26,14 +26,9 @@ class PlaybackService : MediaSessionService() {
     private val scope=CoroutineScope(SupervisorJob()+Dispatchers.IO)
     private val handler=Handler(Looper.getMainLooper())
     private val prefs by lazy { getSharedPreferences("playback",MODE_PRIVATE) }
-    private var counted: String?=null
     private var equalizer: Equalizer?=null
     private var eqKey=""
-    private var lastTick=0L
     private val tick=object:Runnable { override fun run() {
-        val now=android.os.SystemClock.elapsedRealtime(); val delta=(now-lastTick).coerceIn(0,5500); lastTick=now
-        val id=player.currentMediaItem?.mediaId
-        if(player.isPlaying && id!=null) { val first=counted!=id; counted=id; scope.launch { MusicDb.get(this@PlaybackService).dao().listen(Listen(uri=id,at=System.currentTimeMillis(),millis=delta,start=first)) } }
         val deadline=prefs.getLong("sleep",0); if(deadline>0 && System.currentTimeMillis()>=deadline) { player.pause(); prefs.edit().remove("sleep").apply() }
         applyEq(); save(); handler.postDelayed(this,5000)
     } }
@@ -49,7 +44,7 @@ class PlaybackService : MediaSessionService() {
             withContext(Dispatchers.Main) { if(player.mediaItemCount==0) restore(savedQueue,savedIndex,savedPosition,savedRepeat,savedShuffle,allowed) }
         }
         player.addListener(object:Player.Listener {
-            override fun onMediaItemTransition(mediaItem:MediaItem?,reason:Int) { counted=null; save() }
+            override fun onMediaItemTransition(mediaItem:MediaItem?,reason:Int) { save() }
             override fun onIsPlayingChanged(isPlaying:Boolean) { save() }
             override fun onPlayerError(error:PlaybackException) { player.pause() }
         })
@@ -61,7 +56,7 @@ class PlaybackService : MediaSessionService() {
                 return Futures.immediateFuture(items)
             }
         }).build()
-        lastTick=android.os.SystemClock.elapsedRealtime(); handler.postDelayed(tick,5000)
+        handler.postDelayed(tick,5000)
     }
     private fun applyEq() {
         val settings=getSharedPreferences("settings",MODE_PRIVATE)
