@@ -26,11 +26,11 @@ El flujo instala Java 17, SDK 35 y Gradle 8.9, ejecuta pruebas unitarias y `asse
 ## Uso
 
 - La biblioteca empieza vacía. Usa «Importar canciones» o «Carpeta» para seleccionar solo el audio deseado. No se solicita permiso general de multimedia ni se escanea MediaStore. Se crea una copia independiente.
-- Pulsa una canción para reproducir y el mini reproductor para ver los controles completos. El menú de tres puntos tiene **Agregar a playlist**, con un único selector de las playlists existentes.
-- Smart Cover permite buscar carátulas por artista/álbum, previsualizarlas y guardarlas en almacenamiento privado. Las imágenes se asocian por URI en Room y pueden restaurarse a la original. La búsqueda utiliza el catálogo iTunes; utiliza únicamente imágenes con autorización suficiente y revisa las condiciones del proveedor antes de publicar la app.
-- Smart Metadata modifica los datos visibles en la biblioteca, sin reescribir etiquetas ID3 ni el archivo original.
+- Cada canción tiene una tarjeta plegable. Al desplegarla, la misma tarjeta reúne la carátula, el título, el artista, el álbum, la duración y los controles de reproducción y opciones básicas.
+- Las opciones de canción se limitan a agregar a una playlist o a la cola, marcar como favorita, compartir, retirar la copia de Promeia o exportar el audio. Ya no se muestra una ficha técnica, estadísticas de escucha ni un editor avanzado de metadatos.
+- Las carátulas incrustadas en los archivos se muestran automáticamente. Las portadas de playlists pueden elegirse desde una imagen local; no hay búsqueda en Internet ni edición avanzada de carátulas de canciones.
 - Music Match admite M3U extendido y TSV de título/artista exportados por el usuario. Muestra coincidencias y faltantes antes de crear una playlist local. No accede a una cuenta Spotify ni descarga canciones. Ejemplo TSV en `docs/ejemplo-playlist.tsv`.
-- La copia JSON contiene ajustes, playlists, historial, metadatos personalizados y carátulas guardadas; no contiene audio. Restauración por URI, principalmente para el mismo dispositivo. Conserva los archivos originales y comprueba permisos después de reinstalar.
+- La copia JSON conserva los datos básicos de la biblioteca, playlists, favoritos, portadas de playlists y ajustes; no contiene audio. La restauración se realiza por URI y está orientada principalmente al mismo dispositivo.
 
 ## Arquitectura
 
@@ -38,9 +38,9 @@ El flujo instala Java 17, SDK 35 y Gradle 8.9, ejecuta pruebas unitarias y `asse
 app/src/main/java/com/promeia/music/
   MainActivity.kt           conexión al MediaController y migración
   data/Library.kt           Room, importación selectiva SAF, cancelación de escaneos antiguos
-  data/MusicStorage.kt      copias privadas, SHA-256 y metadatos JSON
-  data/Tools.kt             carátulas, M3U/TSV, coincidencias, backup
-  playback/PlaybackService.kt   ExoPlayer, MediaSession, cola y estadísticas
+  data/MusicStorage.kt      copias privadas y SHA-256
+  data/Tools.kt             importación de playlists, coincidencias y backup
+  playback/PlaybackService.kt   ExoPlayer, MediaSession y cola persistente
   ui/Promeia.kt             pantallas Compose y controles
 ```
 
