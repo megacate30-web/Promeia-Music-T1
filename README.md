@@ -1,6 +1,6 @@
 # PROMEIA MUSIC
 
-**Versión 0.5.0 — prototipo Android nativo / código fuente**
+**Versión 0.6.0 — prototipo Android nativo / código fuente**
 
 Reproductor de música local con identidad lavanda y menta. Descarga archivos de audio autorizados desde enlaces HTTPS directos y busca videos mediante YouTube Data API, no extrae audio de servicios de streaming, no exige cuenta y funciona sin conexión para la biblioteca local; las consultas en línea y la primera descarga de modelos requieren Internet. Interfaz en español. Android 8.0+ (API 26), compilación y target 35, Java 17. No contiene música, credenciales ni APK compilado.
 
