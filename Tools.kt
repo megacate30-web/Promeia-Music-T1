@@ -21,7 +21,7 @@ object Tools {
     suspend fun embedded(c:Context,s:Song):ByteArray?=withContext(Dispatchers.IO) { runCatching { val saved=MusicStorage.embeddedFile(c,s.uri); if(saved.isFile)return@runCatching saved.readBytes(); val r=MediaMetadataRetriever(); try { r.setDataSource(c,Uri.parse(s.uri)); r.embeddedPicture } finally { r.release() } }.getOrNull() }
     suspend fun exportMusicFolder(c:Context,destination:Uri)=withContext(Dispatchers.IO){
         
-        val root=MusicStorage.root(c);val data=File(MusicStorage.folder(c,"Metadata"),"library-backup.json");MusicStorage.atomic(data,backup(c).toByteArray(Charsets.UTF_8))
+        val root=MusicStorage.root(c);val data=File(MusicStorage.folder(c,"Backup"),"library-backup.json");MusicStorage.atomic(data,backup(c).toByteArray(Charsets.UTF_8))
         c.contentResolver.openOutputStream(destination)?.use{stream->java.util.zip.ZipOutputStream(stream.buffered()).use{zip->root.walkTopDown().filter{it.isFile&&!it.name.endsWith(".part")&&!it.name.endsWith(".bak")&&!it.name.endsWith(".new")}.forEach{file->kotlinx.coroutines.currentCoroutineContext().ensureActive();zip.putNextEntry(java.util.zip.ZipEntry("Promeia Music/Music/"+file.relativeTo(root).invariantSeparatorsPath));file.inputStream().use{it.copyTo(zip)};zip.closeEntry()}}}?:error("No se pudo abrir destino")
     }
     fun exportPlaylist(p:Playlist,songs:List<Song>):String = "#EXTM3U\n"+p.songs.mapNotNull { id -> songs.find { it.uri==id } }.joinToString("\n") { "#EXTINF:${it.duration/1000},${it.artist} - ${it.title}\n${it.uri}" }
