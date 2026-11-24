@@ -39,7 +39,7 @@ app/src/main/java/com/promeia/music/
   MainActivity.kt           conexión al MediaController y migración
   data/Library.kt           Room, importación selectiva SAF, cancelación de escaneos antiguos
   data/MusicStorage.kt      copias privadas y SHA-256
-  data/Tools.kt             importación de playlists, coincidencias y backup
+  data/Tools.kt             carátulas locales de playlists, listas M3U/TSV y backup
   playback/PlaybackService.kt   ExoPlayer, MediaSession y cola persistente
   ui/Promeia.kt             pantallas Compose y controles
 ```
@@ -67,12 +67,12 @@ Referencias: https://developers.google.com/youtube/data/reference/rest/v3/search
 ```
 Promeia Music/Music/
   Audio/       archivos originales copiados, identificados por SHA-256
-  Covers/      carátulas originales y personalizadas
+  Covers/      caché de carátulas incrustadas y portadas de playlists
   Metadata/    JSON por pista con campos originales y editados
   Lyrics/      letras importadas LRC/TXT
 ```
 
-Room conserva playlists, favoritos, historial y demás información. Ajustes > Exportar carpeta completa (ZIP) permite guardar una copia de los audios y datos en una ubicación visible elegida por el usuario; incluye `Metadata/library-backup.json`. El ZIP es una exportación, no hay restauración integral automática del ZIP. La restauración JSON anterior sigue disponible y está orientada a la misma biblioteca. Las traducciones se recalculan; las letras obtenidas por Internet no se guardan automáticamente.
+Room conserva canciones, playlists, favoritos, canciones ocultas y ajustes básicos; ya no registra historial de escucha ni guarda metadatos técnicos por canción. Ajustes > Exportar carpeta completa (ZIP) permite guardar una copia de los audios y datos en una ubicación visible elegida por el usuario; incluye `Backup/library-backup.json`. El ZIP es una exportación, no hay restauración integral automática del ZIP. La restauración JSON anterior sigue disponible y está orientada a la misma biblioteca. Las traducciones se recalculan; las letras obtenidas por Internet no se guardan automáticamente.
 
 La carpeta privada no es una carpeta pública de la raíz del teléfono. Se conserva al cerrar la app o al actualizar con firma compatible; se elimina al desinstalar o borrar datos. Exporta antes de hacerlo.
 
