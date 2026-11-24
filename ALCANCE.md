@@ -1,4 +1,4 @@
-# Alcance de Promeia Music 0.5.0
+# Alcance de Promeia Music 0.6.0
 
 Estado: **implementado en código, pendiente de compilación y validación en Android**. Parcial indica que existe una implementación limitada; pendiente indica que aún no se incluye. Se priorizó audio local, seguridad del almacenamiento y datos persistentes.
 
